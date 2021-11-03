@@ -262,3 +262,138 @@ SELECT
 FROM Weightlifting_Gold
 ORDER BY Year ASC;
 ```
+
+Part 3 out of 4:
+
+- class videos:
+
+  - Major concepts:
+
+    1. Learned order by last two classes
+    2. Now this class will focus on Partition by subclass!
+
+  - Detail in Partition By
+    1. similar to group by
+    2. PARTITION BY splits the table into partions based on a column's unique values
+       - but the results aren't rolled into one column
+    3. Operated on separately by the window function
+       - ROW_NUMBER will reset for each partition
+       - LAG will only fetch a row's previous value if its previous row is in the same partition
+
+- TWO CODING EXAMPLES IN QUERY:
+
+```
+<!-- WRONG FOR TRIPLE JUMP, WHERE LAST CHAMPION FOR SWE SHOULD BE NULL -->
+WITH Discus_Gold AS (
+  SELECT
+    Year, Event, Country AS Champion
+  FROM Summer_Medals
+  WHERE
+    Year IN (2004, 2008, 2012)
+    AND Gender = 'Men'
+    AND Medal = 'Gold'
+    AND Event IN ('Discus Throw, 'Triple Jump')
+)
+SELECT
+  Year, Event, Champion, LAG(Champion) OVER (ORDER BY Event ASC, Year ASC) AS Last_Champion
+FROM Discus_Gold
+ORDER BY Event ASC, Year ASC;
+```
+
+![](./chap1_3_wrongLastChampion.png)
+
+```
+<!-- Correct version can leverage the help of partition by) -->
+WITH Discus_Gold AS (
+  SELECT
+    Year, Event, Country AS Champion
+  FROM Summer_Medals
+  WHERE
+    Year IN (2004, 2008, 2012)
+    AND Gender = 'Men'
+    AND Medal = 'Gold'
+    AND Event IN ('Discus Throw, 'Triple Jump')
+)
+SELECT
+  Year, Event, Champion,
+  LAG(Champion) OVER
+    (PARTITION BY Event ORDER BY Event ASC, Year ASC) AS Last_Champion
+FROM Discus_Gold
+ORDER BY Event ASC, Year ASC;
+
+```
+
+![](./chap1_3_correct.png)
+
+```
+<!-- A more complex problem that let you partition by two columns (multiple columns) at the same time-->
+WITH Country_Gold AS (
+  SELECT
+    DISTINCT Year, Country, Event
+  FROM Summer_Medals
+  WHERE
+    Year IN (2008, 2012)
+    AND Country IN ('CHN', 'JPN')
+    AND Gender = 'Women' AND Medal = 'Gold'
+)
+SELECT Year, Country, Event,
+  ROW_NUMBER() OVER (PARTITION BY Year, Country)
+FROM Country_Gold;
+
+<!-- you can see that the Row_number is starting for each partition -->
+```
+
+![chinese, japan](./chap1_3.png)
+
+- **excersice: Practices**
+  Reigning champions by gender
+  You've already fetched the previous year's champion for one event. However, if you have multiple events, genders, or other metrics as columns, you'll need to split your table into partitions to avoid having a champion from one event or gender appear as the previous champion of another event or gender.
+
+- instructions:
+  Return the previous champions of each year's event by gender.
+
+- MY CODES
+
+```
+WITH Tennis_Gold AS (
+  SELECT DISTINCT
+    Gender, Year, Country
+  FROM Summer_Medals
+  WHERE
+    Year >= 2000 AND
+    Event = 'Javelin Throw' AND
+    Medal = 'Gold')
+
+SELECT
+  Gender, Year,
+  Country AS Champion,
+  -- Fetch the previous year's champion by gender
+  LAG(Country) OVER (PARTITION BY Gender
+            ORDER BY Year ASC) AS Last_Champion
+FROM Tennis_Gold
+ORDER BY Gender ASC, Year ASC;
+```
+
+Return the previous champions of each year's events by gender and event.
+
+```
+WITH Athletics_Gold AS (
+  SELECT DISTINCT
+    Gender, Year, Event, Country
+  FROM Summer_Medals
+  WHERE
+    Year >= 2000 AND
+    Discipline = 'Athletics' AND
+    Event IN ('100M', '10000M') AND
+    Medal = 'Gold')
+
+SELECT
+  Gender, Year, Event,
+  Country AS Champion,
+  -- Fetch the previous year's champion by gender and event
+  LAG(Country) OVER (PARTITION BY Gender, Event ORDER BY Year ASC) AS Last_Champion
+FROM Athletics_Gold
+ORDER BY Event ASC, Gender ASC, Year ASC;
+
+```
+Good job! You can partition by more than one column in case your groups are spread over several columns.
